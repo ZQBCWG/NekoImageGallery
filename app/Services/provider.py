@@ -7,13 +7,23 @@ from .storage import StorageService
 from .transformers_service import TransformersService
 from .upload_service import UploadService
 from .vector_db_context import VectorDbContext
+from .local_search_service import LocalSearchService
 from ..config import config, environment
 
 
 class ServiceProvider:
     def __init__(self):
         self.transformers_service = TransformersService()
-        self.db_context = VectorDbContext()
+        
+        # Initialize appropriate search service based on configuration
+        if config.local_search.enabled:
+            self.search_service = LocalSearchService(self.transformers_service)
+            logger.info("Using LocalSearchService for image search")
+        else:
+            self.search_service = VectorDbContext()
+            logger.info("Using VectorDbContext for image search")
+
+        self.db_context = self.search_service  # Backward compatibility
         self.ocr_service = None
 
         if config.ocr_search.enable and (environment.local_indexing or config.admin_api_enable):
@@ -38,11 +48,11 @@ class ServiceProvider:
             self.ocr_service = DisabledOCRService()
         logger.info(f"OCR service '{type(self.ocr_service).__name__}' initialized.")
 
-        self.index_service = IndexService(self.ocr_service, self.transformers_service, self.db_context)
+        self.index_service = IndexService(self.ocr_service, self.transformers_service, self.search_service)
         self.storage_service = StorageService()
         logger.info(f"Storage service '{type(self.storage_service.active_storage).__name__}' initialized.")
 
-        self.upload_service = UploadService(self.storage_service, self.db_context, self.index_service)
+        self.upload_service = UploadService(self.storage_service, self.search_service, self.index_service)
         logger.info(f"Upload service '{type(self.upload_service).__name__}' initialized")
 
     async def onload(self):

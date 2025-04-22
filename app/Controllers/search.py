@@ -62,8 +62,8 @@ async def textSearch(
         else services.transformers_service.get_bert_vector(prompt)
     if basis.basis == SearchBasisEnum.ocr and exact:
         filter_param.ocr_text = prompt
-    results = await services.db_context.query_search(text_vector,
-                                                     query_vector_name=services.db_context.vector_name_for_basis(
+    results = await services.search_service.query_search(text_vector,
+                                                     query_vector_name=services.search_service.vector_name_for_basis(
                                                         basis.basis),
                                                      filter_param=filter_param,
                                                      top_k=paging.count,
@@ -83,7 +83,7 @@ async def imageSearch(
     img = Image.open(fakefile)
     logger.info("Image search request received")
     image_vector = services.transformers_service.get_image_vector(img)
-    results = await services.db_context.query_search(image_vector,
+    results = await services.search_service.query_search(image_vector,
                                                      top_k=paging.count,
                                                      skip=paging.skip,
                                                      filter_param=filter_param)
@@ -101,12 +101,12 @@ async def similarWith(
         paging: Annotated[SearchPagingParams, Depends(SearchPagingParams)]
 ) -> SearchApiResponse:
     logger.info("Similar search request received, id: {}", image_id)
-    results = await services.db_context.query_similar(search_id=str(image_id),
-                                                      top_k=paging.count,
-                                                      skip=paging.skip,
-                                                      filter_param=filter_param,
-                                                      query_vector_name=services.db_context.vector_name_for_basis(
-                                                         basis.basis))
+    results = await services.search_service.query_similar(search_id=str(image_id),
+                                                       top_k=paging.count,
+                                                       skip=paging.skip,
+                                                       filter_param=filter_param,
+                                                       query_vector_name=services.search_service.vector_name_for_basis(
+                                                          basis.basis))
     return await result_postprocessing(
         SearchApiResponse(result=results, message=f"Successfully get {len(results)} results.", query_id=uuid4()))
 
@@ -149,15 +149,11 @@ async def randomPick(
 ) -> SearchApiResponse:
     logger.info("Random pick request received")
     random_vector = services.transformers_service.get_random_vector(seed)
-    result = await services.db_context.query_search(random_vector, top_k=paging.count, skip=paging.skip,
-                                                    filter_param=filter_param)
+    result = await services.search_service.query_search(random_vector, top_k=paging.count, skip=paging.skip,
+                                                     filter_param=filter_param)
     return await result_postprocessing(
         SearchApiResponse(result=result, message=f"Successfully get {len(result)} results.", query_id=uuid4()))
 
-
-# @search_router.get("/recall/{query_id}", description="Recall the query with given queryId")
-# async def recallQuery(query_id: str):
-#     raise NotImplementedError()
 
 async def process_advanced_and_combined_search_query(model: AdvancedSearchModel,
                                                      basis: SearchBasisParams,
@@ -175,8 +171,8 @@ async def process_advanced_and_combined_search_query(model: AdvancedSearchModel,
             raise NotImplementedError()
     # In order to ensure the query effect of the combined query, modify the actual top_k
     _query_top_k = min(max(30, paging.count * 3), 100) if is_combined_search else paging.count
-    result = await services.db_context.query_similar(
-        query_vector_name=services.db_context.vector_name_for_basis(basis.basis),
+    result = await services.search_service.query_similar(
+        query_vector_name=services.search_service.vector_name_for_basis(basis.basis),
         positive_vectors=positive_vectors,
         negative_vectors=negative_vectors,
         mode=model.mode,

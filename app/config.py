@@ -55,6 +55,12 @@ class LocalStorageSettings(BaseModel):
     path: str = './static'
 
 
+class LocalSearchSettings(BaseModel):
+    enabled: bool = False
+    directory: str = './images'
+    extensions: list[str] = ['.jpg', '.jpeg', '.png', '.webp']
+
+
 class StorageMode(str, Enum):
     LOCAL = 'local'
     S3 = 's3'
@@ -83,6 +89,7 @@ class Config(BaseSettings):
     ocr_search: OCRSearchSettings = OCRSearchSettings()
     static_file: StaticFileSettings = StaticFileSettings()  # [Deprecated]
     storage: StorageSettings = StorageSettings()
+    local_search: LocalSearchSettings = LocalSearchSettings()
 
     device: str = 'auto'
     cors_origins: set[str] = {'*'}
