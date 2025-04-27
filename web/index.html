@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neko Image Gallery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        body.dark {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        .search-container {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        #search-input {
+            flex-grow: 1;
+            padding: 10px;
+            font-size: 16px;
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+            border: 1px solid #333;
+        }
+        #search-button {
+            padding: 10px 20px;
+            background: #2e7d32;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #search-button:hover {
+            background: #1b5e20;
+        }
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .image-card {
+            border: 1px solid #333;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            background-color: #1e1e1e;
+        }
+        .image-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .image-info {
+            padding: 10px;
+        }
+        .image-info h3 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            color: #e0e0e0;
+        }
+        .image-info p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+            color: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>Neko Image Gallery</h1>
+        <button id="theme-toggle" style="padding: 5px 10px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer;">Dark Mode</button>
+    </div>
+    
+    <div class="search-container">
+        <input type="text" id="search-input" placeholder="Search for images...">
+        <button id="search-button">Search</button>
+    </div>
+
+    <div class="loading" id="loading">Searching...</div>
+    
+    <div class="results-grid" id="results"></div>
+
+    <script>
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('theme-toggle');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        let darkMode = localStorage.getItem('darkMode') === 'true' || prefersDark;
+
+        function updateTheme() {
+            if (darkMode) {
+                document.body.classList.add('dark');
+                themeToggle.textContent = 'Light Mode';
+            } else {
+                document.body.classList.remove('dark');
+                themeToggle.textContent = 'Dark Mode';
+            }
+        }
+
+        themeToggle.addEventListener('click', () => {
+            darkMode = !darkMode;
+            localStorage.setItem('darkMode', darkMode);
+            updateTheme();
+        });
+
+        // Initialize theme
+        updateTheme();
+
+        document.getElementById('search-button').addEventListener('click', performSearch);
+        document.getElementById('search-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        async function performSearch() {
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) return;
+
+            const resultsContainer = document.getElementById('results');
+            const loading = document.getElementById('loading');
+            
+            resultsContainer.innerHTML = '';
+            loading.style.display = 'block';
+
+            try {
+                const response = await fetch(`/text/${encodeURIComponent(query)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                if (data.result && data.result.length > 0) {
+                    displayResults(data.result);
+                } else {
+                    resultsContainer.innerHTML = '<p>No results found</p>';
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                resultsContainer.innerHTML = `<p>Error performing search: ${error.message}</p>`;
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function displayResults(results) {
+            const resultsContainer = document.getElementById('results');
+            resultsContainer.innerHTML = '';
+
+            results.forEach(result => {
+                const card = document.createElement('div');
+                card.className = 'image-card';
+                
+                const img = document.createElement('img');
+                img.src = result.img.url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222222"/><text x="50" y="50" font-family="Arial" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="%23e0e0e0">No Image</text></svg>';
+                img.alt = 'Search result';
+                img.onerror = function() {
+                    this.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23222222"/><text x="50" y="50" font-family="Arial" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="%23e0e0e0">Error Loading</text></svg>';
+                };
+                
+                const info = document.createElement('div');
+                info.className = 'image-info';
+                info.innerHTML = `
+                    <h3>Image ID: ${result.img.id}</h3>
+                    <p>Score: ${result.score.toFixed(4)}</p>
+                    ${result.img.width && result.img.height ? `<p>Size: ${result.img.width}×${result.img.height}</p>` : ''}
+                `;
+                
+                card.appendChild(img);
+                card.appendChild(info);
+                resultsContainer.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
