@@ -39,15 +39,24 @@ async def result_postprocessing(
     if not config.storage.method.enabled:
         return resp
     for item in resp.result:
-        # Skip URL modification for local images
-        if not item.img.local:
+        # Handle local images
+        if item.img.local:
+            # Use actual image filename from payload
+            filename = item.img.payload.get("filename")
+            if not filename:
+                logger.warning(f"Missing filename in payload for image {item.img.id}")
+                filename = f"{item.img.id}.{item.img.format or 'jpg'}"
+            item.img.url = f"/images/{filename}"
+            if item.img.local_thumbnail:
+                item.img.thumbnail_url = f"/images/thumbnails/{item.img.id}.webp"
+        else:
             img_extension = item.img.format or item.img.url.split('.')[-1]
             img_remote_filename = f"{item.img.id}.{img_extension}"
             item.img.url = await services.storage_service.active_storage.presign_url(img_remote_filename)
-        if item.img.thumbnail_url is not None and not item.img.local and item.img.local_thumbnail:
-            thumbnail_remote_filename = f"thumbnails/{item.img.id}.webp"
-            item.img.thumbnail_url = await services.storage_service.active_storage.presign_url(
-                thumbnail_remote_filename)
+            if item.img.thumbnail_url is not None and item.img.local_thumbnail:
+                thumbnail_remote_filename = f"thumbnails/{item.img.id}.webp"
+                item.img.thumbnail_url = await services.storage_service.active_storage.presign_url(
+                    thumbnail_remote_filename)
     return resp
 
 
@@ -66,14 +75,22 @@ async def textSearch(
     logger.info("Text search request received, prompt: {}", prompt)
     text_vector = services.transformers_service.get_text_vector(prompt) if basis.basis == SearchBasisEnum.vision \
         else services.transformers_service.get_bert_vector(prompt)
-    if basis.basis == SearchBasisEnum.ocr and exact:
-        filter_param.ocr_text = prompt
+    
+    # Only set query_text for tag filtering if not OCR exact search
+    if not (basis.basis == SearchBasisEnum.ocr and exact):
+        filter_param.query_text = prompt.lower()  # Normalize to lowercase for tag matching
+    
     results = await services.search_service.query_search(text_vector,
                                                      query_vector_name=services.search_service.vector_name_for_basis(
                                                         basis.basis),
                                                      filter_param=filter_param,
                                                      top_k=paging.count,
                                                      skip=paging.skip)
+    
+    # Additional tag filtering for vision search
+    if basis.basis == SearchBasisEnum.vision and filter_param.query_text:
+        results = [r for r in results
+                  if r.img.tags and any(filter_param.query_text in tag.lower() for tag in r.img.tags)]
     return await result_postprocessing(
         SearchApiResponse(result=results, message=f"Successfully get {len(results)} results.", query_id=uuid4()),
         services=services)

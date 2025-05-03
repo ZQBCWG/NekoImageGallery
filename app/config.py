@@ -31,6 +31,9 @@ class ModelsSettings(BaseModel):
     clip: str = 'openai/clip-vit-large-patch14'
     bert: str = 'bert-base-chinese'
     easypaddleocr: str | None = None
+    wd14_tagger: str = 'SmilingWolf/wd-vit-large-tagger-v3'  # WD14模型仓库ID
+    tagger_threshold: float = 0.35  # 标签置信度阈值
+    tagger_enabled: bool = True  # 是否启用自动标签生成
 
 
 class OCRSearchSettings(BaseModel):

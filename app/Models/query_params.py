@@ -16,6 +16,7 @@ class SearchPagingParams:
 class FilterParams:
     def __init__(
             self,
+            query_text: Annotated[str | None, Query(description="Text query for tag matching")] = None,
             preferred_ratio: Annotated[
                 float | None, Query(gt=0, description="The preferred aspect ratio of the image.")] = None,
             ratio_tolerance: Annotated[

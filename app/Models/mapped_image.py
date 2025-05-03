@@ -33,6 +33,7 @@ class MappedImage(BaseModel):
         description="Whether the thumbnail image is stored in local storage.")] = False
     format: Optional[str] = None  # required for s3 local storage
     comments: Annotated[Optional[str], Field(description="Any custom comments or text payload for the image.")] = None
+    tags: Annotated[Optional[list[str]], Field(description="WD14 generated tags for the image.")] = []
 
     @property
     def ocr_text_lower(self) -> str | None:
@@ -47,16 +48,40 @@ class MappedImage(BaseModel):
         result['index_date'] = self.index_date.isoformat()
         # Qdrant doesn't support case-insensitive search, so we need to store a lowercase version of the text
         result['ocr_text_lower'] = self.ocr_text_lower
+        # Include additional metadata
+        if hasattr(self, '_additional_payload'):
+            result.update(self._additional_payload)
         return result
+
+    def add_payload_data(self, key: str, value: any):
+        if not hasattr(self, '_additional_payload'):
+            self._additional_payload = {}
+        self._additional_payload[key] = value
 
     @classmethod
     def from_payload(cls, img_id: str, payload: dict,
                      image_vector: Optional[ndarray] = None, text_contain_vector: Optional[ndarray] = None):
         # Convert the datetime string back to datetime object
         index_date = datetime.fromisoformat(payload['index_date'])
-        del payload['index_date']
-        return cls(id=UUID(img_id),
-                   index_date=index_date,
-                   **payload,
-                   image_vector=image_vector if image_vector is not None else None,
-                   text_contain_vector=text_contain_vector if text_contain_vector is not None else None)
+        
+        # Extract additional payload data
+        additional_payload = {}
+        for key in ['filename', 'width', 'height', 'aspect_ratio']:
+            if key in payload:
+                additional_payload[key] = payload[key]
+        
+        # Create instance
+        instance = cls(id=UUID(img_id),
+                      index_date=index_date,
+                      **{k:v for k,v in payload.items()
+                         if k not in ['index_date', 'filename', 'width', 'height', 'aspect_ratio']},
+                      image_vector=image_vector if image_vector is not None else None,
+                      text_contain_vector=text_contain_vector if text_contain_vector is not None else None)
+        
+        # Set additional payload data
+        if additional_payload:
+            if not hasattr(instance, '_additional_payload'):
+                instance._additional_payload = {}
+            instance._additional_payload.update(additional_payload)
+            
+        return instance

@@ -5,8 +5,15 @@ from app.config import config
 from app.Controllers import admin, images, search, gui
 from app.Services.provider import ServiceProvider
 
+async def lifespan(app: FastAPI):
+    # Initialize service provider with running event loop
+    app.state.services = ServiceProvider()
+    await app.state.services.onload()
+    yield
+    await app.state.services.onexit()
+
 def create_app():
-    app = FastAPI()
+    app = FastAPI(lifespan=lifespan)
     
     # Configure CORS
     app.add_middleware(
@@ -26,16 +33,12 @@ def create_app():
         app.include_router(admin.admin_router)
 
     # Mount static files with correct path
-    app.mount("/static", StaticFiles(directory="./images"), name="static")
-
-    # Initialize service provider
-    app.state.services = ServiceProvider()
+    app.mount("/images", StaticFiles(directory="./images"), name="images")
 
     return app
 
 app = create_app()
 
-async def lifespan(app: FastAPI):
-    await app.state.services.onload()
-    yield
-    await app.state.services.onexit()
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
